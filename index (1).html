@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>방명록</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.7.0/tinymce.min.js"></script>
+    <style>
+        /* 이전 CSS 스타일 유지 */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .guestbook-form {
+            width: 80%;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .guestbook-list {
+            width: 80%;
+            margin: 20px auto;
+        }
+        .entry {
+            border: 1px solid #eee;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        /* 나머지 스타일 유지 */
+    </style>
+</head>
+<body>
+    <div class="guestbook-form">
+        <h2>방명록 작성</h2>
+        <form id="guestbookForm">
+            <div class="form-group">
+                <label for="writer">작성자:</label>
+                <input type="text" id="writer" required>
+            </div>
+            <div class="form-group">
+                <label for="password">비밀번호:</label>
+                <input type="password" id="password" required>
+            </div>
+            <div class="form-group">
+                <label for="content">내용:</label>
+                <textarea id="content"></textarea>
+            </div>
+            <button type="submit">등록</button>
+        </form>
+    </div>
+
+    <div class="guestbook-list" id="entries">
+    </div>
+
+    <script type="module">
+        // Firebase 초기화
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            getDocs,
+            deleteDoc,
+            doc,
+            query,
+            orderBy
+        } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD6v7aPpNDz24rKlQQd62e2rFHiNrHC9QY",
+            authDomain: "guestbook-8a1ef.firebaseapp.com",
+            projectId: "guestbook-8a1ef",
+            storageBucket: "guestbook-8a1ef.appspot.com",
+            messagingSenderId: "319966652290",
+            appId: "1:319966652290:web:b7b4f596a13a451f17d19b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // TinyMCE 초기화
+        tinymce.init({
+            selector: '#content',
+            height: 300,
+            menubar: false,
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'media', 'table', 'help', 'wordcount'
+            ],
+            toolbar: 'undo redo | blocks | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
+        });
+
+        // 방명록 저장
+        document.getElementById('guestbookForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const entry = {
+                writer: document.getElementById('writer').value,
+                password: document.getElementById('password').value,
+                content: tinymce.get('content').getContent(),
+                date: new Date().toISOString()
+            };
+
+            try {
+                await addDoc(collection(db, "guestbook"), entry);
+                this.reset();
+                tinymce.get('content').setContent('');
+                displayEntries();
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert('저장 중 오류가 발생했습니다.');
+            }
+        });
+
+        // 방명록 표시
+        async function displayEntries() {
+            const entriesDiv = document.getElementById('entries');
+            entriesDiv.innerHTML = '';
+            
+            try {
+                const q = query(collection(db, "guestbook"), orderBy("date", "desc"));
+                const querySnapshot = await getDocs(q);
+                
+                querySnapshot.forEach((doc) => {
+                    const entry = doc.data();
+                    const entryElement = document.createElement('div');
+                    entryElement.className = 'entry';
+                    entryElement.innerHTML = `
+                        <h3>${entry.writer}</h3>
+                        <small>${new Date(entry.date).toLocaleString()}</small>
+                        <div>${entry.content}</div>
+                        <button class="delete-btn" onclick="deleteEntry('${doc.id}', '${entry.password}')">삭제</button>
+                    `;
+                    entriesDiv.appendChild(entryElement);
+                });
+            } catch (error) {
+                console.error("Error getting documents: ", error);
+                alert('데이터를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 방명록 삭제
+        window.deleteEntry = async function(docId, savedPassword) {
+            const password = prompt('비밀번호를 입력하세요:');
+            
+            if (password === savedPassword) {
+                try {
+                    await deleteDoc(doc(db, "guestbook", docId));
+                    displayEntries();
+                } catch (error) {
+                    console.error("Error removing document: ", error);
+                    alert('삭제 중 오류가 발생했습니다.');
+                }
+            } else {
+                alert('비밀번호가 일치하지 않습니다.');
+            }
+        };
+
+        // 초기 목록 표시
+        displayEntries();
+    </script>
+</body>
+</html>
